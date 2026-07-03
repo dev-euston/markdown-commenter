@@ -20,6 +20,16 @@ import CommentPopover, {
   type PendingAnchor,
 } from "@/components/CommentPopover";
 
+// Skip images whose src resolves empty (e.g. `![alt]()`). React warns that an
+// empty `src` makes the browser refetch the whole page.
+const markdownComponents = {
+  img(props: React.ComponentProps<"img">) {
+    if (!props.src) return null;
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img {...props} alt={props.alt ?? ""} />;
+  },
+};
+
 export default function Home() {
   const [markdown, setMarkdown] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
@@ -274,7 +284,10 @@ export default function Home() {
                 className="mx-auto w-full max-w-3xl rounded-lg border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
               >
                 <div className="md-preview">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownComponents}
+                  >
                     {markdown}
                   </ReactMarkdown>
                 </div>
