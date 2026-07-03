@@ -14,6 +14,13 @@ Markdown Commenter takes two inputs:
 It produces a rendered view of the document with those comments displayed
 against the text they refer to.
 
+## Current features
+
+- **Markdown preview** — load a `.md`/`.markdown` file (click to browse or
+  drag-and-drop) and view it rendered with GitHub-flavored Markdown support
+  (tables, task lists, strikethrough, autolinks). Files are read client-side,
+  so nothing is uploaded.
+
 ## Tech stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · ESLint.
@@ -25,7 +32,7 @@ npm install
 npm run dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
+Then open [http://localhost:3041](http://localhost:3041).
 
 ### Scripts
 
@@ -73,6 +80,6 @@ docker run -p 3000:3000 markdown-commenter
 
 ## Status
 
-Early development (MVP). The Next.js + TypeScript app is scaffolded; the
-commenter features are not built yet. The comment file format, output target,
+Early development (MVP). Markdown loading and preview are in place; the
+commenting layer is not built yet. The comment file format, output target,
 and anchoring model are still being defined.
