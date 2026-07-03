@@ -36,8 +36,14 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ## Docker
 
-The app builds into a slim, self-contained image using Next.js
-[standalone output](https://nextjs.org/docs/app/api-reference/config/next-config-js/output).
+Build the app locally first, then package it into a slim image. The image
+only copies the Next.js
+[standalone output](https://nextjs.org/docs/app/api-reference/config/next-config-js/output)
+from `.next/` — it does **not** build inside Docker.
+
+```bash
+npm run build   # produces .next/standalone and .next/static
+```
 
 ### With Docker Compose (recommended)
 

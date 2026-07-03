@@ -1,20 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# ---- Dependencies ----
-FROM node:22-alpine AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-
-# ---- Builder ----
-FROM node:22-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
-
-# ---- Runner ----
+# Packages a pre-built Next.js app. Run `npm run build` locally first —
+# this image only copies the standalone output, it does not build.
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
@@ -26,10 +13,10 @@ ENV HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 
-# Copy the standalone server output, static assets, and public files.
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy the pre-built standalone server, static assets, and public files.
+COPY public ./public
+COPY --chown=nextjs:nodejs .next/standalone ./
+COPY --chown=nextjs:nodejs .next/static ./.next/static
 
 USER nextjs
 EXPOSE 3000

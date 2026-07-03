@@ -1,5 +1,8 @@
 node_modules
-.next
+# Exclude the whole .next build dir except the standalone output we package.
+.next/*
+!.next/standalone
+!.next/static
 .git
 .claude
 npm-debug.log*

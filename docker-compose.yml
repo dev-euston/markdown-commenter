@@ -1,5 +1,7 @@
 services:
   web:
+    # Run `npm run build` first — the Dockerfile packages .next/standalone,
+    # it does not build inside the image.
     build:
       context: .
       dockerfile: Dockerfile
