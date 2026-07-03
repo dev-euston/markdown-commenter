@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.claude
+npm-debug.log*
+*.local
+.env*
+.DS_Store
+README.md
+AGENTS.md
+CLAUDE.md
+coverage
+Dockerfile
+.dockerignore

@@ -1,0 +1,15 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      # PORT/HOSTNAME are already set in the image; override here if needed.
+    # Load runtime env vars from .env.local if present (does not fail if absent).
+    env_file:
+      - path: .env.local
+        required: false
+    restart: unless-stopped
