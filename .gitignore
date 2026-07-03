@@ -50,3 +50,6 @@ coverage
 # AI Tools
 .claude
 CLAUDE.md
+
+# Deployment
+airbase.json
