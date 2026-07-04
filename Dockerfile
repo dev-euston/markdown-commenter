@@ -2,7 +2,7 @@
 
 # Packages a pre-built Next.js app. Run `npm run build` locally first —
 # this image only copies the standalone output, it does not build.
-FROM node:22-alpine AS runner
+FROM gdssingapore/airbase:node-22 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

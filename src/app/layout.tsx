@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,11 +18,17 @@ export const metadata: Metadata = {
   description: "Load a Markdown file and preview it",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Read the nonce set by the proxy middleware. Consuming a header here opts
+  // the app out of static prerendering, so Next renders per request and stamps
+  // this same nonce onto its inline bootstrap scripts — satisfying Airbase's
+  // strict `script-src` CSP.
+  await headers();
+
   return (
     <html
       lang="en"
