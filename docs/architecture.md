@@ -397,6 +397,36 @@ provides none of its own.
 
 ***
 
+## Testing
+
+Tests run on **Vitest** with a **jsdom** environment and Testing Library; the
+pure libraries and presentational components are covered directly. There is no
+network or server to mock — the whole app is client-side.
+
+```
+npm test            # run the suite once
+npm run test:watch  # watch mode
+npm run test:coverage  # run with a v8 coverage report + thresholds
+```
+
+- **`src/lib/comments.test.ts`** — schema validation and (de)serialization:
+  valid/invalid shapes, version and `comments`-array rejection, per-field
+  defaults, `occurrence` flooring/clamping, and a serialize→parse round-trip.
+- **`src/lib/highlight.test.ts`** — the DOM highlighter against jsdom fixtures:
+  single and repeated-occurrence wrapping, quotes spanning multiple inline
+  elements, missing/empty quotes skipped, resolved marking, click callbacks,
+  clear/re-apply, and `findSelectionQuote` occurrence counting.
+- **`src/components/*.test.tsx`** — `CommentSidebar` and `CommentPopover`:
+  rendering, initials/date formatting, select/resolve/delete callbacks, and
+  keyboard interactions (Enter/Space, ⌘/Ctrl+Enter, Esc, click-away).
+
+Coverage thresholds (lines/functions/statements ≥ 90%, branches ≥ 85%) are
+enforced in `vitest.config.ts`; the build fails if coverage regresses. The
+orchestration in `page.tsx` is exercised indirectly through its extracted
+libraries and components rather than by a full end-to-end harness.
+
+***
+
 ## Decisions, Risks, and Open Questions
 
 ### Key decisions
@@ -429,3 +459,4 @@ provides none of its own.
 - `src/lib/comments.ts` — comment schema + parse/serialize (source of truth for the data model)
 - `src/lib/highlight.ts` — DOM highlighter
 - `src/app/page.tsx` — orchestration and state
+- `vitest.config.ts` — test runner + coverage thresholds; `*.test.ts(x)` next to sources

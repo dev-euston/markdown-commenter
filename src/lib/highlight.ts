@@ -99,12 +99,16 @@ function wrapRange(
 
     try {
       range.surroundContents(mark);
+      /* v8 ignore start -- defensive: this range is always within a single
+         text node, so surroundContents cannot throw here. Kept in case the
+         range-construction above ever changes to span nodes. */
     } catch {
       // surroundContents can throw if the range partially selects a
       // non-text node; fall back to extract + insert.
       const contents = range.extractContents();
       mark.appendChild(contents);
       range.insertNode(mark);
+      /* v8 ignore stop */
     } finally {
       range.detach?.();
     }
@@ -210,5 +214,8 @@ function charIndexOfPoint(
     const pos = node.compareDocumentPosition(piece.node);
     if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return piece.start;
   }
+  // Defensive: callers only reach here with a selection that contains text
+  // inside the container, so some tracked node always follows.
+  /* v8 ignore next 2 */
   return -1;
 }

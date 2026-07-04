@@ -44,12 +44,14 @@ export default function CommentPopover({
     return () => document.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  // Keep the popover within the viewport horizontally.
+  // Keep the popover within the viewport horizontally. The `typeof window`
+  // guard is for SSR safety; this component only ever mounts client-side.
+  const viewportWidth =
+    /* v8 ignore next */
+    typeof window !== "undefined" ? window.innerWidth : POPOVER_WIDTH * 2;
   const left = Math.min(
     Math.max(8, anchor.x),
-    (typeof window !== "undefined" ? window.innerWidth : POPOVER_WIDTH * 2) -
-      POPOVER_WIDTH -
-      8
+    viewportWidth - POPOVER_WIDTH - 8
   );
 
   function submit() {
