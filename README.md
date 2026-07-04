@@ -20,6 +20,16 @@ against the text they refer to.
   drag-and-drop) and view it rendered with GitHub-flavored Markdown support
   (tables, task lists, strikethrough, autolinks). Files are read client-side,
   so nothing is uploaded.
+- **Inline commenting** — select text in the rendered document to attach a
+  comment; highlighted passages and a side comment list stay in sync
+  (Confluence-style). Click a highlight or a sidebar entry to focus the pair.
+- **Comment threads** — each comment carries an author, timestamp, and
+  resolved state. Comments can be resolved/reopened and deleted.
+- **Separate comment file** — comments live in a standalone JSON file (`Open
+  comments` to load, `New comments` to start fresh, `Download comments` to
+  export). Comments anchor by the exact quoted text plus an occurrence index,
+  so they survive edits elsewhere in the document. Everything stays
+  client-side.
 
 ## Tech stack
 
@@ -78,8 +88,36 @@ docker run -p 3000:3000 markdown-commenter
   so they must be present during `docker build`. Pass them as build args if you
   add any.
 
+## Comment file format
+
+A comment file is JSON:
+
+```json
+{
+  "version": 1,
+  "documentName": "example.md",
+  "comments": [
+    {
+      "id": "c-abc123",
+      "quote": "exact text from the document",
+      "occurrence": 1,
+      "author": "Ada",
+      "body": "the comment text",
+      "createdAt": "2026-07-04T00:00:00.000Z",
+      "resolved": false
+    }
+  ]
+}
+```
+
+- **`quote`** — the exact document substring the comment anchors to.
+- **`occurrence`** — the 1-based Nth match of `quote`, disambiguating repeated
+  phrases. A comment whose `quote` no longer appears is skipped silently.
+
 ## Status
 
-Early development (MVP). Markdown loading and preview are in place; the
-commenting layer is not built yet. The comment file format, output target,
-and anchoring model are still being defined.
+Early development (MVP). Markdown preview and the client-side commenting layer
+(inline highlights, side comment list, JSON comment file load/save) are in
+place. Comment anchoring, output target, and schema are settled as described
+above; anchor re-resolution after heavy edits is not yet handled beyond the
+quote/occurrence match.
