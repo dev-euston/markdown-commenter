@@ -7,6 +7,9 @@ Design and architecture documentation for Markdown Commenter.
 - [`architecture.md`](architecture.md) — architecture design: context, fundamental
   decisions, building-block and runtime views, data model, deployment, and open
   questions. Diagrams are inline Mermaid.
+- [`pitchdeck.md`](pitchdeck.md) — product pitch deck for prospective users (Marp
+  slide source: problem, solution, and how it works). Render with the Marp VS Code
+  extension or marp-cli.
 
 ## Conventions
 
