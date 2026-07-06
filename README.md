@@ -30,6 +30,10 @@ against the text they refer to.
   export). Comments anchor by the exact quoted text plus an occurrence index,
   so they survive edits elsewhere in the document. Everything stays
   client-side.
+- **Zip bundle** — the document and its comments file can be packaged together:
+  `Open .zip` loads a single archive (one `.md`/`.markdown` + one `.json` at the
+  archive root) and `Download .zip` exports the pair as one file. Packing and
+  unpacking are done in-browser with `fflate`; nothing is uploaded.
 
 ## Tech stack
 

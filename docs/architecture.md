@@ -82,6 +82,12 @@ are in [Runtime View](#runtime-view).
 5. **Export comments.** The user clicks *Download comments* → the current
    comment set is serialized to JSON → a file download is triggered.
 
+6. **Load / export a zip bundle.** *Open .zip* extracts one root-level Markdown
+   and one root-level comments JSON from an archive (`src/lib/zip.ts`), validating
+   both before any state is set so an invalid bundle aborts cleanly; *Download
+   .zip* packs the current document and serialized comments into one archive.
+   Packing/unpacking is in-browser via `fflate` — nothing is uploaded.
+
 ***
 
 ## Quality Goals and Constraints
@@ -458,5 +464,6 @@ libraries and components rather than by a full end-to-end harness.
 - `README.md` — features, comment file format, getting started
 - `src/lib/comments.ts` — comment schema + parse/serialize (source of truth for the data model)
 - `src/lib/highlight.ts` — DOM highlighter
+- `src/lib/zip.ts` — zip bundle pack/unpack (document + comments in one archive)
 - `src/app/page.tsx` — orchestration and state
 - `vitest.config.ts` — test runner + coverage thresholds; `*.test.ts(x)` next to sources
