@@ -15,6 +15,7 @@ import {
   clearHighlights,
   findSelectionQuote,
 } from "@/lib/highlight";
+import { buildZip, extractZip, zipFileNameFor } from "@/lib/zip";
 import CommentSidebar from "@/components/CommentSidebar";
 import CommentPopover, {
   type PendingAnchor,
@@ -36,6 +37,7 @@ export default function Home() {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const commentInputRef = useRef<HTMLInputElement>(null);
+  const zipInputRef = useRef<HTMLInputElement>(null);
   const articleRef = useRef<HTMLElement>(null);
 
   const [comments, setComments] = useState<Comment[]>([]);
@@ -74,6 +76,30 @@ export default function Home() {
     reader.readAsText(file);
   }, []);
 
+  const loadZipFile = useCallback((file: File) => {
+    file
+      .arrayBuffer()
+      .then((buf) => {
+        // Validate extraction and comments before touching any state so an
+        // invalid archive aborts without a partial load.
+        const { markdown, markdownName, commentsJson, commentsName } =
+          extractZip(new Uint8Array(buf));
+        const parsed = parseCommentFile(commentsJson);
+        setMarkdown(markdown);
+        setFileName(markdownName);
+        setComments(parsed.comments);
+        setCommentFileName(commentsName);
+        setActiveId(null);
+      })
+      .catch((err) => {
+        alert(
+          `Could not load zip: ${
+            err instanceof Error ? err.message : "unknown error"
+          }`
+        );
+      });
+  }, []);
+
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -93,6 +119,7 @@ export default function Home() {
     setPending(null);
     if (inputRef.current) inputRef.current.value = "";
     if (commentInputRef.current) commentInputRef.current.value = "";
+    if (zipInputRef.current) zipInputRef.current.value = "";
   }, []);
 
   // Re-apply highlights whenever the document or comments change.
@@ -196,6 +223,23 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }, [comments, fileName, commentFileName]);
 
+  const downloadZip = useCallback(() => {
+    const json = serializeComments(comments, fileName || undefined);
+    const bytes = buildZip({
+      markdown,
+      markdownName: fileName,
+      commentsJson: json,
+      commentsName: commentFileName || "comments.json",
+    });
+    const blob = new Blob([bytes as BlobPart], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = zipFileNameFor(fileName);
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [comments, fileName, commentFileName, markdown]);
+
   const startNewComments = useCallback(() => {
     const empty = emptyCommentFile(fileName || undefined);
     setComments(empty.comments);
@@ -222,6 +266,12 @@ export default function Home() {
           >
             Open .md file
           </button>
+          <button
+            onClick={() => zipInputRef.current?.click()}
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Open .zip
+          </button>
           {markdown && (
             <>
               <button
@@ -242,6 +292,12 @@ export default function Home() {
                 className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Download comments
+              </button>
+              <button
+                onClick={downloadZip}
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Download .zip
               </button>
               <button
                 onClick={clear}
@@ -269,6 +325,17 @@ export default function Home() {
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) loadCommentFile(file);
+            }}
+          />
+          <input
+            ref={zipInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) loadZipFile(file);
+              e.target.value = "";
             }}
           />
         </div>
