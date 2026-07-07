@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -21,15 +21,55 @@ import CommentPopover, {
   type PendingAnchor,
 } from "@/components/CommentPopover";
 import OnboardingTour from "@/components/OnboardingTour";
+import MermaidBlock, { MermaidContext } from "@/components/MermaidBlock";
 import { TOUR_STEPS, hasSeenTour, markTourSeen } from "@/lib/tour";
 
-// Skip images whose src resolves empty (e.g. `![alt]()`). React warns that an
-// empty `src` makes the browser refetch the whole page.
+// Defined at module scope so ReactMarkdown doesn't remount the tree on every
+// render (which would discard each MermaidBlock's per-block toggle state).
+// MermaidBlock reads all dynamic data from MermaidContext, so this object is
+// stable and never needs to close over page state.
 const markdownComponents = {
+  // Skip images whose src resolves empty (e.g. `![alt]()`). React warns that an
+  // empty `src` makes the browser refetch the whole page.
   img(props: React.ComponentProps<"img">) {
     if (!props.src) return null;
     // eslint-disable-next-line @next/next/no-img-element
     return <img {...props} alt={props.alt ?? ""} />;
+  },
+  code({
+    className,
+    children,
+    ...props
+  }: React.ComponentProps<"code"> & { node?: unknown }) {
+    if (/language-mermaid/.test(className ?? "")) {
+      return <MermaidBlock source={String(children).replace(/\n$/, "")} />;
+    }
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  },
+  pre({
+    children,
+    node,
+    ...props
+  }: React.ComponentProps<"pre"> & { node?: unknown }) {
+    // Inspect the hast node's first child (the <code>) for a mermaid class.
+    const firstChild = (
+      node as { children?: Array<{ properties?: { className?: unknown } }> }
+    )?.children?.[0];
+    const childClass = firstChild?.properties?.className;
+    const classes = Array.isArray(childClass)
+      ? childClass
+      : typeof childClass === "string"
+        ? [childClass]
+        : [];
+    // Unwrap mermaid blocks so the MermaidBlock is not nested inside a <pre>.
+    if (classes.some((c) => String(c).includes("language-mermaid"))) {
+      return <>{children}</>;
+    }
+    return <pre {...props}>{children}</pre>;
   },
 };
 
@@ -48,6 +88,15 @@ export default function Home() {
   const [lastAuthor, setLastAuthor] = useState<string>("");
   const [commentFileName, setCommentFileName] = useState<string>("");
   const [showTour, setShowTour] = useState(false);
+
+  // Bumped whenever a MermaidBlock toggles between diagram and source views.
+  // Used only to re-run the DOM highlighter over newly-rendered source text;
+  // toggle state itself is never persisted.
+  const [diagramViewVersion, setDiagramViewVersion] = useState(0);
+  const onDiagramToggle = useCallback(
+    () => setDiagramViewVersion((v) => v + 1),
+    []
+  );
 
   // Auto-launch the tour on a user's first visit only. Done in an effect (not a
   // lazy initializer) so the server render — where localStorage is unavailable —
@@ -146,7 +195,7 @@ export default function Home() {
     return () => {
       clearHighlights(container);
     };
-  }, [markdown, comments]);
+  }, [markdown, comments, diagramViewVersion]);
 
   // Reflect the active comment onto its highlight marks.
   useEffect(() => {
@@ -160,7 +209,7 @@ export default function Home() {
         m.dataset.commentId === activeId && activeId !== null
       );
     });
-  }, [activeId, comments, markdown]);
+  }, [activeId, comments, markdown, diagramViewVersion]);
 
   // Capture a text selection inside the document to start a new comment.
   const onMouseUp = useCallback(() => {
@@ -269,6 +318,16 @@ export default function Home() {
     setComments(empty.comments);
     setCommentFileName("comments.json");
   }, [fileName, comments.length]);
+
+  const mermaidCtx = useMemo(
+    () => ({
+      comments,
+      activeId,
+      setActiveId,
+      onToggle: onDiagramToggle,
+    }),
+    [comments, activeId, onDiagramToggle]
+  );
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
@@ -388,12 +447,14 @@ export default function Home() {
                 className="mx-auto w-full max-w-3xl rounded-lg border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
               >
                 <div className="md-preview">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={markdownComponents}
-                  >
-                    {markdown}
-                  </ReactMarkdown>
+                  <MermaidContext.Provider value={mermaidCtx}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={markdownComponents}
+                    >
+                      {markdown}
+                    </ReactMarkdown>
+                  </MermaidContext.Provider>
                 </div>
               </article>
             </div>
