@@ -3,6 +3,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Home from "./page";
 import { hasSeenTour, markTourSeen } from "@/lib/tour";
+import { renderMermaid } from "@/lib/mermaid";
+
+// Mock mermaid so jsdom never attempts real diagram rendering.
+vi.mock("@/lib/mermaid", () => ({
+  renderMermaid: vi.fn(),
+}));
 
 /** Load a Markdown document via the hidden .md file input. */
 async function loadMarkdown(container: HTMLElement, text = "# Hello world") {
@@ -96,5 +102,176 @@ describe("Home page", () => {
     const confirm = vi.spyOn(window, "confirm");
     await userEvent.click(screen.getByRole("button", { name: "New comments" }));
     expect(confirm).not.toHaveBeenCalled();
+  });
+});
+
+const ONE_MERMAID = "# Diagram\n\n```mermaid\ngraph TD; A-->B\n```\n";
+const TWO_MERMAID =
+  "```mermaid\ngraph TD; A-->B\n```\n\n```mermaid\ngraph LR; C-->D\n```\n";
+
+/** Select the raw text of the first <code> in a source-view <pre>. */
+function selectSourceText(container: HTMLElement): void {
+  const codes = container.querySelectorAll("article pre code");
+  const code = codes[codes.length - 1] as HTMLElement;
+  const textNode = code.firstChild as Text;
+  const range = document.createRange();
+  range.setStart(textNode, 0);
+  range.setEnd(textNode, textNode.length);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+describe("Home page — Mermaid", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    markTourSeen();
+    vi.mocked(renderMermaid).mockReset();
+    vi.mocked(renderMermaid).mockResolvedValue(
+      "<svg data-testid='mermaid-svg'></svg>"
+    );
+  });
+
+  it("renders a mermaid block as a diagram SVG by default, not a raw code block", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container, ONE_MERMAID);
+
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+    // The raw mermaid source should NOT be shown as a code block by default.
+    expect(container.querySelector("article pre")).toBeNull();
+  });
+
+  it("toggles a block to source view (selectable text) and back to diagram", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container, ONE_MERMAID);
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Show source" }));
+    const code = container.querySelector("article pre code");
+    expect(code?.textContent).toBe("graph TD; A-->B");
+
+    await userEvent.click(screen.getByRole("button", { name: "Show diagram" }));
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+  });
+
+  it("keeps per-diagram toggle independent across two blocks", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container, TWO_MERMAID);
+    await waitFor(() =>
+      expect(container.querySelectorAll(".md-mermaid-diagram svg")).toHaveLength(2)
+    );
+
+    // Toggle only the first block to source.
+    const toggles = screen.getAllByRole("button", { name: "Show source" });
+    await userEvent.click(toggles[0]);
+
+    // First block now shows source; the second is still a diagram.
+    expect(container.querySelectorAll("article pre code")).toHaveLength(1);
+    expect(container.querySelectorAll(".md-mermaid-diagram svg")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "Show diagram" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Show source" })
+    ).toHaveLength(1);
+  });
+
+  it("creates a comment anchored to the selected source text", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container, ONE_MERMAID);
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Show source" }));
+    const article = container.querySelector("article") as HTMLElement;
+
+    // jsdom's Range lacks getBoundingClientRect; stub it so the popover anchor
+    // can be computed.
+    Range.prototype.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        bottom: 0,
+        top: 0,
+        right: 0,
+        width: 0,
+        height: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // Select the raw source text and fire mouseup to open the popover.
+    selectSourceText(container);
+    fireEvent.mouseUp(article);
+
+    const authorInput = await screen.findByPlaceholderText(/your name/i);
+    await userEvent.type(authorInput, "Ada");
+    const bodyInput = screen.getByPlaceholderText(/add a comment/i);
+    await userEvent.type(bodyInput, "a diagram note");
+    await userEvent.click(screen.getByRole("button", { name: "Comment" }));
+
+    // The comment is listed in the sidebar, and the source text is highlighted.
+    expect(await screen.findByText("a diagram note")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        container.querySelector("article mark.md-comment-highlight")
+      ).toBeTruthy()
+    );
+  });
+
+  it("highlights the diagram when it carries a comment and activates on click", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container, ONE_MERMAID);
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+
+    // Load a comment whose quote lies in the mermaid source.
+    const json = JSON.stringify({
+      version: 1,
+      comments: [
+        {
+          id: "cm1",
+          quote: "A-->B",
+          occurrence: 1,
+          author: "Ada",
+          body: "diagram comment",
+          createdAt: new Date(0).toISOString(),
+          resolved: false,
+        },
+      ],
+    });
+    const input = container.querySelector(
+      'input[accept*=".json"]'
+    ) as HTMLInputElement;
+    const file = new File([json], "comments.json", {
+      type: "application/json",
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+    await screen.findByText("diagram comment");
+
+    // The diagram carries the has-comment highlight while the comment stays
+    // listed in the sidebar.
+    const diagram = await waitFor(() => {
+      const el = container.querySelector(".md-mermaid-diagram.has-comment");
+      expect(el).toBeTruthy();
+      return el as HTMLElement;
+    });
+    expect(diagram.getAttribute("data-comment-id")).toBe("cm1");
+
+    // Clicking the highlighted diagram activates its comment.
+    fireEvent.click(diagram);
+    await waitFor(() =>
+      expect(
+        container.querySelector(".md-mermaid-diagram.has-comment.is-active")
+      ).toBeTruthy()
+    );
   });
 });
