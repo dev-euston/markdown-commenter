@@ -20,6 +20,8 @@ import CommentSidebar from "@/components/CommentSidebar";
 import CommentPopover, {
   type PendingAnchor,
 } from "@/components/CommentPopover";
+import OnboardingTour from "@/components/OnboardingTour";
+import { TOUR_STEPS, hasSeenTour, markTourSeen } from "@/lib/tour";
 
 // Skip images whose src resolves empty (e.g. `![alt]()`). React warns that an
 // empty `src` makes the browser refetch the whole page.
@@ -45,6 +47,20 @@ export default function Home() {
   const [pending, setPending] = useState<PendingAnchor | null>(null);
   const [lastAuthor, setLastAuthor] = useState<string>("");
   const [commentFileName, setCommentFileName] = useState<string>("");
+  const [showTour, setShowTour] = useState(false);
+
+  // Auto-launch the tour on a user's first visit only. Done in an effect (not a
+  // lazy initializer) so the server render — where localStorage is unavailable —
+  // matches the client's first paint and avoids a hydration mismatch.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!hasSeenTour()) setShowTour(true);
+  }, []);
+
+  const closeTour = useCallback(() => {
+    markTourSeen();
+    setShowTour(false);
+  }, []);
 
   const loadFile = useCallback((file: File) => {
     const reader = new FileReader();
@@ -241,10 +257,18 @@ export default function Home() {
   }, [comments, fileName, commentFileName, markdown]);
 
   const startNewComments = useCallback(() => {
+    if (
+      comments.length > 0 &&
+      !window.confirm(
+        "Start a new comment set? This will discard the current comments."
+      )
+    ) {
+      return;
+    }
     const empty = emptyCommentFile(fileName || undefined);
     setComments(empty.comments);
     setCommentFileName("comments.json");
-  }, [fileName]);
+  }, [fileName, comments.length]);
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
@@ -260,18 +284,20 @@ export default function Home() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => inputRef.current?.click()}
-            className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-          >
-            Open .md file
-          </button>
-          <button
-            onClick={() => zipInputRef.current?.click()}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            Open .zip
-          </button>
+          <div className="flex items-center gap-2" data-tour="load">
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            >
+              Open .md file
+            </button>
+            <button
+              onClick={() => zipInputRef.current?.click()}
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              Open .zip
+            </button>
+          </div>
           {markdown && (
             <>
               <button
@@ -286,19 +312,21 @@ export default function Home() {
               >
                 New comments
               </button>
-              <button
-                onClick={downloadComments}
-                disabled={comments.length === 0}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                Download comments
-              </button>
-              <button
-                onClick={downloadZip}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                Download .zip
-              </button>
+              <div className="flex items-center gap-2" data-tour="download">
+                <button
+                  onClick={downloadComments}
+                  disabled={comments.length === 0}
+                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Download comments
+                </button>
+                <button
+                  onClick={downloadZip}
+                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Download .zip
+                </button>
+              </div>
               <button
                 onClick={clear}
                 className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -307,6 +335,14 @@ export default function Home() {
               </button>
             </>
           )}
+          <button
+            onClick={() => setShowTour(true)}
+            aria-label="Help"
+            title="Show the tour"
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            ? Help
+          </button>
           <input
             ref={inputRef}
             type="file"
@@ -347,6 +383,7 @@ export default function Home() {
             <div className="flex-1 overflow-y-auto p-6">
               <article
                 ref={articleRef}
+                data-tour="document"
                 onMouseUp={onMouseUp}
                 className="mx-auto w-full max-w-3xl rounded-lg border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
               >
@@ -371,6 +408,7 @@ export default function Home() {
         ) : (
           <div className="flex flex-1 flex-col p-6">
             <div
+              data-tour="document"
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragging(true);
@@ -402,6 +440,10 @@ export default function Home() {
           onSubmit={addComment}
           onCancel={() => setPending(null)}
         />
+      )}
+
+      {showTour && (
+        <OnboardingTour steps={TOUR_STEPS} onClose={closeTour} />
       )}
     </div>
   );
