@@ -32,6 +32,7 @@ function renderBlock(
     activeId: null,
     setActiveId: vi.fn(),
     onToggle: vi.fn(),
+    sourceViewRequest: null,
     ...ctx,
   };
   const utils = render(
@@ -114,5 +115,61 @@ describe("MermaidBlock", () => {
     expect(diagram.classList.contains("has-comment")).toBe(false);
     fireEvent.click(diagram);
     expect(setActiveId).not.toHaveBeenCalled();
+  });
+
+  it("switches to source view when a sourceViewRequest targets a comment this block owns", async () => {
+    const onToggle = vi.fn();
+    const { container } = renderBlock({
+      comments: [comment({ id: "cx", quote: "A-->B" })],
+      sourceViewRequest: { commentId: "cx", nonce: 1 },
+      onToggle,
+    });
+    const pre = await waitFor(() => {
+      const el = container.querySelector("pre code");
+      expect(el).toBeTruthy();
+      return el as HTMLElement;
+    });
+    expect(pre.textContent).toBe(SOURCE);
+    expect(onToggle).toHaveBeenCalled();
+  });
+
+  it("does NOT switch to source when the request targets a comment not contained in this block's source", async () => {
+    const onToggle = vi.fn();
+    const { container } = renderBlock({
+      comments: [comment({ id: "cx", quote: "not present" })],
+      sourceViewRequest: { commentId: "cx", nonce: 1 },
+      onToggle,
+    });
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+    expect(container.querySelector("pre")).toBeNull();
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it("stays in source view (no revert) after a subsequent activeId change", async () => {
+    const value: MermaidContextValue = {
+      comments: [comment({ id: "cx", quote: "A-->B" })],
+      activeId: null,
+      setActiveId: vi.fn(),
+      onToggle: vi.fn(),
+      sourceViewRequest: { commentId: "cx", nonce: 1 },
+    };
+    const { container, rerender } = render(
+      <MermaidContext.Provider value={value}>
+        <MermaidBlock source={SOURCE} />
+      </MermaidContext.Provider>
+    );
+    await waitFor(() =>
+      expect(container.querySelector("pre code")).toBeTruthy()
+    );
+
+    // Re-render with a changed activeId but the same request — must not revert.
+    rerender(
+      <MermaidContext.Provider value={{ ...value, activeId: "cx" }}>
+        <MermaidBlock source={SOURCE} />
+      </MermaidContext.Provider>
+    );
+    expect(container.querySelector("pre code")).toBeTruthy();
   });
 });

@@ -31,6 +31,10 @@ export interface MermaidContextValue {
   activeId: string | null;
   setActiveId: (id: string) => void;
   onToggle: () => void;
+  // The id of the comment whose owning block should switch to source view,
+  // plus a monotonically-increasing nonce so re-selecting the same comment
+  // (e.g. after a manual revert) re-fires the request.
+  sourceViewRequest?: { commentId: string; nonce: number } | null;
 }
 
 export const MermaidContext = createContext<MermaidContextValue>({
@@ -38,10 +42,11 @@ export const MermaidContext = createContext<MermaidContextValue>({
   activeId: null,
   setActiveId: () => {},
   onToggle: () => {},
+  sourceViewRequest: null,
 });
 
 export default function MermaidBlock({ source }: { source: string }) {
-  const { comments, activeId, setActiveId, onToggle } =
+  const { comments, activeId, setActiveId, onToggle, sourceViewRequest } =
     useContext(MermaidContext);
 
   // Ephemeral per-block view state. Default = diagram; never persisted.
@@ -75,6 +80,24 @@ export default function MermaidBlock({ source }: { source: string }) {
     // diagramId is stable for the component's lifetime; keyed on source.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source]);
+
+  // When the page requests source view for a comment this block owns, flip to
+  // source so its highlight <mark> can be created. Only the block that actually
+  // contains the comment's quote responds; there is no auto-revert.
+  useEffect(() => {
+    if (!sourceViewRequest) return;
+    const target = comments.find((c) => c.id === sourceViewRequest.commentId);
+    if (target && target.quote && source.includes(target.quote)) {
+      if (!showSource) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setShowSource(true);
+        onToggle();
+      }
+    }
+    // showSource is intentionally omitted: the request should act on the block's
+    // ownership of the quote, not re-fire when the view state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceViewRequest, comments, source, onToggle]);
 
   const toggle = () => {
     setShowSource((v) => !v);
