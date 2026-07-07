@@ -85,6 +85,16 @@ export default function Home() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingAnchor | null>(null);
+  // A comment whose highlight mark isn't yet in the DOM (its mermaid block is
+  // showing the diagram): once the block flips to source and applyHighlights
+  // re-runs, the deferred focus effect scrolls/flashes it.
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+  // Instructs the owning MermaidBlock to switch to source view. The nonce lets
+  // re-selecting the same comment re-fire the request after a manual revert.
+  const [sourceViewRequest, setSourceViewRequest] = useState<{
+    commentId: string;
+    nonce: number;
+  } | null>(null);
   const [lastAuthor, setLastAuthor] = useState<string>("");
   const [commentFileName, setCommentFileName] = useState<string>("");
   const [showTour, setShowTour] = useState(false);
@@ -187,6 +197,20 @@ export default function Home() {
     if (zipInputRef.current) zipInputRef.current.value = "";
   }, []);
 
+  // Scroll to and flash the highlight mark for `id`. Returns whether a mark was
+  // found — false means its owning mermaid block is still showing the diagram.
+  const focusMark = useCallback((id: string): boolean => {
+    const container = articleRef.current;
+    const mark = container?.querySelector<HTMLElement>(
+      `mark.md-comment-highlight[data-comment-id="${id}"]`
+    );
+    if (!mark) return false;
+    mark.scrollIntoView({ behavior: "smooth", block: "center" });
+    mark.classList.add("flash");
+    window.setTimeout(() => mark.classList.remove("flash"), 1000);
+    return true;
+  }, []);
+
   // Re-apply highlights whenever the document or comments change.
   useEffect(() => {
     const container = articleRef.current;
@@ -196,6 +220,18 @@ export default function Home() {
       clearHighlights(container);
     };
   }, [markdown, comments, diagramViewVersion]);
+
+  // Deferred focus: once a mermaid block has flipped to source view (bumping
+  // diagramViewVersion) and applyHighlights has re-created its mark, scroll to
+  // and flash it. Placed after the applyHighlights effect so it runs against
+  // the freshly-applied highlights within the same commit.
+  useEffect(() => {
+    if (!pendingFocusId) return;
+    if (focusMark(pendingFocusId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPendingFocusId(null);
+    }
+  }, [pendingFocusId, diagramViewVersion, comments, markdown, focusMark]);
 
   // Reflect the active comment onto its highlight marks.
   useEffect(() => {
@@ -250,18 +286,23 @@ export default function Home() {
     [pending]
   );
 
-  const selectComment = useCallback((id: string) => {
-    setActiveId(id);
-    const container = articleRef.current;
-    const mark = container?.querySelector<HTMLElement>(
-      `mark.md-comment-highlight[data-comment-id="${id}"]`
-    );
-    if (mark) {
-      mark.scrollIntoView({ behavior: "smooth", block: "center" });
-      mark.classList.add("flash");
-      window.setTimeout(() => mark.classList.remove("flash"), 1000);
-    }
-  }, []);
+  const selectComment = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      // A mark already exists for normal document comments, and for mermaid
+      // blocks already showing source — focus it immediately.
+      if (focusMark(id)) return;
+      // Otherwise the comment is likely anchored to a mermaid block currently
+      // showing its diagram: ask the owning block to flip to source view, then
+      // defer the scroll/flash until its mark has rendered.
+      setPendingFocusId(id);
+      setSourceViewRequest((prev) => ({
+        commentId: id,
+        nonce: (prev?.nonce ?? 0) + 1,
+      }));
+    },
+    [focusMark]
+  );
 
   const toggleResolved = useCallback((id: string) => {
     setComments((prev) =>
@@ -325,8 +366,9 @@ export default function Home() {
       activeId,
       setActiveId,
       onToggle: onDiagramToggle,
+      sourceViewRequest,
     }),
-    [comments, activeId, onDiagramToggle]
+    [comments, activeId, onDiagramToggle, sourceViewRequest]
   );
 
   return (

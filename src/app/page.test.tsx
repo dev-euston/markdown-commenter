@@ -274,4 +274,186 @@ describe("Home page — Mermaid", () => {
       ).toBeTruthy()
     );
   });
+
+  /** Load a comment JSON with a single comment, via the hidden .json input. */
+  function loadMermaidComment(
+    container: HTMLElement,
+    overrides: Record<string, unknown> = {}
+  ): void {
+    const json = JSON.stringify({
+      version: 1,
+      comments: [
+        {
+          id: "cm1",
+          quote: "A-->B",
+          occurrence: 1,
+          author: "Ada",
+          body: "diagram comment",
+          createdAt: new Date(0).toISOString(),
+          resolved: false,
+          ...overrides,
+        },
+      ],
+    });
+    const input = container.querySelector(
+      'input[accept*=".json"]'
+    ) as HTMLInputElement;
+    const file = new File([json], "comments.json", {
+      type: "application/json",
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+  }
+
+  it("selecting a diagram-view mermaid comment in the sidebar switches that block to source and focuses the highlight", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const { container } = render(<Home />);
+    await loadMarkdown(container, ONE_MERMAID);
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+
+    loadMermaidComment(container);
+    await waitFor(() =>
+      expect(
+        container.querySelector(".md-mermaid-diagram.has-comment")
+      ).toBeTruthy()
+    );
+
+    await userEvent.click(screen.getByText("diagram comment"));
+
+    await waitFor(() => {
+      const code = container.querySelector("article pre code");
+      expect(code?.textContent).toBe("graph TD; A-->B");
+    });
+    await waitFor(() =>
+      expect(
+        container.querySelector('mark.md-comment-highlight[data-comment-id="cm1"]')
+      ).toBeTruthy()
+    );
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("does not auto-revert to diagram when another comment is selected or deselected", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const { container } = render(<Home />);
+    await loadMarkdown(container, ONE_MERMAID);
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+
+    loadMermaidComment(container);
+    await waitFor(() =>
+      expect(
+        container.querySelector(".md-mermaid-diagram.has-comment")
+      ).toBeTruthy()
+    );
+
+    await userEvent.click(screen.getByText("diagram comment"));
+    await waitFor(() =>
+      expect(container.querySelector("article pre code")).toBeTruthy()
+    );
+
+    // Re-select the same comment — the block must stay in source view.
+    await userEvent.click(screen.getByText("diagram comment"));
+    expect(container.querySelector("article pre code")).toBeTruthy();
+  });
+
+  it("clicking the diagram does NOT switch it to source view", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container, ONE_MERMAID);
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+
+    loadMermaidComment(container);
+    const diagram = await waitFor(() => {
+      const el = container.querySelector(".md-mermaid-diagram.has-comment");
+      expect(el).toBeTruthy();
+      return el as HTMLElement;
+    });
+
+    fireEvent.click(diagram);
+    await waitFor(() =>
+      expect(
+        container.querySelector(".md-mermaid-diagram.has-comment.is-active")
+      ).toBeTruthy()
+    );
+    // Clicking only activates; it must not force source view.
+    expect(container.querySelector("article pre")).toBeNull();
+  });
+
+  it("focuses the correct occurrence when the quote appears in both document text and a diagram", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const doc = "Prose mentions A-->B here.\n\n```mermaid\ngraph TD; A-->B\n```\n";
+    const { container } = render(<Home />);
+    await loadMarkdown(container, doc);
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+
+    // Occurrence 2 points at the mermaid source (occurrence 1 is the prose).
+    loadMermaidComment(container, { occurrence: 2 });
+    await waitFor(() =>
+      expect(
+        container.querySelector(".md-mermaid-diagram.has-comment")
+      ).toBeTruthy()
+    );
+
+    await userEvent.click(screen.getByText("diagram comment"));
+    await waitFor(() =>
+      expect(container.querySelector("article pre code")).toBeTruthy()
+    );
+    await waitFor(() =>
+      expect(
+        container.querySelector('mark.md-comment-highlight[data-comment-id="cm1"]')
+      ).toBeTruthy()
+    );
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("a non-mermaid comment selection scrolls/flashes with no diagram view change", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const doc = "Some plain prose text.\n\n```mermaid\ngraph TD; A-->B\n```\n";
+    const { container } = render(<Home />);
+    await loadMarkdown(container, doc);
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+
+    loadMermaidComment(container, { quote: "plain prose", occurrence: 1 });
+    await screen.findByText("diagram comment");
+    await waitFor(() =>
+      expect(
+        container.querySelector('mark.md-comment-highlight[data-comment-id="cm1"]')
+      ).toBeTruthy()
+    );
+
+    await userEvent.click(screen.getByText("diagram comment"));
+    // Diagram is untouched: no source-view <pre> appears.
+    expect(container.querySelector("article pre")).toBeNull();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("a mermaid comment whose block is already in source view focuses without an extra toggle", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const { container } = render(<Home />);
+    await loadMarkdown(container, ONE_MERMAID);
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+
+    loadMermaidComment(container);
+    await screen.findByText("diagram comment");
+
+    // Manually put the block in source view first.
+    await userEvent.click(screen.getByRole("button", { name: "Show source" }));
+    await waitFor(() =>
+      expect(container.querySelectorAll("article pre code")).toHaveLength(1)
+    );
+
+    await userEvent.click(screen.getByText("diagram comment"));
+    // Still exactly one source-view block (no extra toggle needed).
+    expect(container.querySelectorAll("article pre code")).toHaveLength(1);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
 });
