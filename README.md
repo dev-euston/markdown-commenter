@@ -43,6 +43,10 @@ against the text they refer to.
   reveal its raw source, and commenting works in that source view. Selecting a
   comment anchored to a diagram flips its block to source so the highlight can
   be scrolled to and flashed.
+- **Bundled docs** — a `Docs` menu loads the project's own docs (pitch deck,
+  architecture) straight into the viewer. They ship as same-origin static
+  assets under `public/docs/` and are fetched in-browser, so they double as
+  ready-made sample documents for trying out commenting.
 
 ## Tech stack
 

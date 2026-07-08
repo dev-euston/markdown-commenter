@@ -248,6 +248,14 @@ flowchart TB
   the diagram; `page.tsx` drives a `MermaidContext` (`comments`, `activeId`,
   `onToggle`, `sourceViewRequest`) so selecting such a comment flips the owning
   block to source view and defers the scroll/flash until its `<mark>` renders.
+- **Bundled docs** (`src/lib/docs.ts` + `public/docs/`) — a `Docs` menu in
+  `page.tsx` loads the project's own docs (pitch deck, architecture) into the
+  viewer. `BUNDLED_DOCS` is a hand-maintained registry and `loadBundledDoc`
+  `fetch`es each doc's `path`; docs live under `public/docs/` so they're
+  same-origin static assets and the `fetch` is allowed by the strict CSP
+  (`connect-src 'self'`) with no nonce changes. `openDoc` reuses the file-load
+  render path (sets markdown + filename, leaves comments untouched), so the
+  bundled docs also serve as ready-made sample documents.
 
 ***
 
@@ -487,6 +495,7 @@ libraries and components rather than by a full end-to-end harness.
 - `src/lib/zip.ts` — zip bundle pack/unpack (document + comments in one archive)
 - `src/lib/tour.ts` — onboarding tour steps + localStorage "seen" flag
 - `src/lib/mermaid.ts` — lazy, client-only mermaid render wrapper (strict CSP)
+- `src/lib/docs.ts` — registry + fetch of bundled docs served from `public/docs/`
 - `src/components/MermaidBlock.tsx` — per-block diagram/source toggle + comment anchoring in source view
 - `src/app/page.tsx` — orchestration and state
 - `vitest.config.ts` — test runner + coverage thresholds; `*.test.ts(x)` next to sources
