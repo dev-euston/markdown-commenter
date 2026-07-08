@@ -213,7 +213,10 @@ flowchart TB
   JSON download.
 - **ReactMarkdown + remark-gfm** — renders the document with GitHub-flavored
   Markdown (tables, task lists, strikethrough, autolinks). A custom `img`
-  component drops empty-`src` images.
+  component drops empty-`src` images, and custom `code`/`pre` components route
+  fenced ` ```mermaid ` blocks to `MermaidBlock` (unwrapping the `<pre>` so the
+  diagram isn't nested inside it). `markdownComponents` is defined at module
+  scope so the tree isn't remounted (which would discard per-block toggle state).
 - **`lib/highlight.ts`** — the DOM highlighter. `applyHighlights` /
   `clearHighlights` wrap and unwrap `<mark>` ranges over the rendered container;
   `findSelectionQuote` derives `{ quote, occurrence }` from the user's selection.
@@ -228,6 +231,23 @@ flowchart TB
 - **`CommentPopover`** — the add-comment popover anchored near the selection;
   captures author (remembered across comments) and body; ⌘/Ctrl+Enter submits,
   Esc cancels.
+- **`OnboardingTour`** (`src/components/OnboardingTour.tsx` + `src/lib/tour.ts`)
+  — a three-step overlay (load → comment → download) that spotlights the control
+  each step describes via `data-tour` selectors. It auto-launches on a first
+  visit and is reopenable via `? Help`; the "seen" flag lives in `localStorage`
+  (`lib/tour.ts`, offline, never throws on storage failure).
+- **`MermaidBlock`** (`src/components/MermaidBlock.tsx` + `src/lib/mermaid.ts`)
+  — renders one ` ```mermaid ` block as a client-side SVG with a per-block
+  diagram/source toggle (ephemeral, never persisted). `lib/mermaid.ts` lazily
+  `import()`s mermaid inside the render call (FD-3: keeps it out of the server
+  bundle / SSR) and initializes it with `securityLevel: "strict"` (FD-4: the
+  sanitized SVG carries no inline scripts, so it satisfies the `script-src
+  'self'` CSP). Commenting reuses the existing text-node walk: it works only in
+  **source** view, where the raw source is real selectable text. A block that
+  owns a comment (its quote is a substring of the source) shows a highlight on
+  the diagram; `page.tsx` drives a `MermaidContext` (`comments`, `activeId`,
+  `onToggle`, `sourceViewRequest`) so selecting such a comment flips the owning
+  block to source view and defers the scroll/flash until its `<mark>` renders.
 
 ***
 
@@ -465,5 +485,8 @@ libraries and components rather than by a full end-to-end harness.
 - `src/lib/comments.ts` — comment schema + parse/serialize (source of truth for the data model)
 - `src/lib/highlight.ts` — DOM highlighter
 - `src/lib/zip.ts` — zip bundle pack/unpack (document + comments in one archive)
+- `src/lib/tour.ts` — onboarding tour steps + localStorage "seen" flag
+- `src/lib/mermaid.ts` — lazy, client-only mermaid render wrapper (strict CSP)
+- `src/components/MermaidBlock.tsx` — per-block diagram/source toggle + comment anchoring in source view
 - `src/app/page.tsx` — orchestration and state
 - `vitest.config.ts` — test runner + coverage thresholds; `*.test.ts(x)` next to sources

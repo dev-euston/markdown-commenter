@@ -34,6 +34,15 @@ against the text they refer to.
   `Open .zip` loads a single archive (one `.md`/`.markdown` + one `.json` at the
   archive root) and `Download .zip` exports the pair as one file. Packing and
   unpacking are done in-browser with `fflate`; nothing is uploaded.
+- **Onboarding tour** — a three-step walkthrough (load → comment → download)
+  auto-launches on a first visit and can be reopened any time via the `? Help`
+  button. Each step spotlights the control it describes; the "seen" flag is kept
+  in `localStorage`, so the tour never reappears once dismissed.
+- **Mermaid diagrams** — fenced ` ```mermaid ` blocks render as SVG diagrams
+  in the browser (nothing is uploaded). Each block has a per-block toggle to
+  reveal its raw source, and commenting works in that source view. Selecting a
+  comment anchored to a diagram flips its block to source so the highlight can
+  be scrolled to and flashed.
 
 ## Tech stack
 
