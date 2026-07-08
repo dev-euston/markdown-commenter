@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Home from "./page";
@@ -102,6 +102,90 @@ describe("Home page", () => {
     const confirm = vi.spyOn(window, "confirm");
     await userEvent.click(screen.getByRole("button", { name: "New comments" }));
     expect(confirm).not.toHaveBeenCalled();
+  });
+});
+
+describe("Home page — Docs nav", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    localStorage.clear();
+    markTourSeen();
+    vi.mocked(renderMermaid).mockReset();
+    vi.mocked(renderMermaid).mockResolvedValue(
+      "<svg data-testid='mermaid-svg'></svg>"
+    );
+    fetchMock = vi.fn(async (path: string) => ({
+      ok: true,
+      text: async () =>
+        path === "/docs/architecture.md"
+          ? "# Architecture\n\n```mermaid\ngraph TD; A-->B\n```\n"
+          : "# Pitch deck\n\nThe pitch goes here.",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the Docs control with both entries after opening the menu", async () => {
+    render(<Home />);
+    await userEvent.click(screen.getByRole("button", { name: "Docs" }));
+    expect(
+      screen.getByRole("menuitem", { name: "Pitch deck" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Architecture" })
+    ).toBeInTheDocument();
+  });
+
+  it("offers only Pitch deck and Architecture (no collab/readme)", async () => {
+    render(<Home />);
+    await userEvent.click(screen.getByRole("button", { name: "Docs" }));
+    const items = screen.getAllByRole("menuitem");
+    expect(items).toHaveLength(2);
+    for (const item of items) {
+      expect(item.textContent ?? "").not.toMatch(/collab|readme/i);
+    }
+  });
+
+  it("selecting Architecture fetches and renders its inline mermaid", async () => {
+    const { container } = render(<Home />);
+    await userEvent.click(screen.getByRole("button", { name: "Docs" }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: "Architecture" })
+    );
+
+    await waitFor(() =>
+      expect(container.querySelector(".md-mermaid-diagram svg")).toBeTruthy()
+    );
+    expect(fetchMock).toHaveBeenCalledWith("/docs/architecture.md");
+    expect(await screen.findByText("architecture.md")).toBeInTheDocument();
+  });
+
+  it("selecting Pitch deck fetches and renders its content", async () => {
+    render(<Home />);
+    await userEvent.click(screen.getByRole("button", { name: "Docs" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Pitch deck" }));
+
+    expect(await screen.findByText("The pitch goes here.")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/docs/pitchdeck.md");
+    expect(screen.getByText("pitchdeck.md")).toBeInTheDocument();
+  });
+
+  it("replaces already-loaded content when a doc is selected", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container, "# Existing document body");
+    expect(screen.getByText("Existing document body")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Docs" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Pitch deck" }));
+
+    expect(await screen.findByText("The pitch goes here.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Existing document body")
+    ).not.toBeInTheDocument();
   });
 });
 

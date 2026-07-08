@@ -16,6 +16,7 @@ import {
   findSelectionQuote,
 } from "@/lib/highlight";
 import { buildZip, extractZip, zipFileNameFor } from "@/lib/zip";
+import { BUNDLED_DOCS, type BundledDoc, loadBundledDoc } from "@/lib/docs";
 import CommentSidebar from "@/components/CommentSidebar";
 import CommentPopover, {
   type PendingAnchor,
@@ -98,6 +99,7 @@ export default function Home() {
   const [lastAuthor, setLastAuthor] = useState<string>("");
   const [commentFileName, setCommentFileName] = useState<string>("");
   const [showTour, setShowTour] = useState(false);
+  const [docsMenuOpen, setDocsMenuOpen] = useState(false);
 
   // Bumped whenever a MermaidBlock toggles between diagram and source views.
   // Used only to re-run the DOM highlighter over newly-rendered source text;
@@ -128,6 +130,22 @@ export default function Home() {
       setFileName(file.name);
     };
     reader.readAsText(file);
+  }, []);
+
+  // Load a bundled doc into the viewer, reusing the file-load render path.
+  // Mirrors loadFile: sets markdown + fileName, leaves comments untouched.
+  const openDoc = useCallback(async (doc: BundledDoc) => {
+    try {
+      const text = await loadBundledDoc(doc);
+      setMarkdown(text);
+      setFileName(doc.fileName);
+    } catch (err) {
+      alert(
+        `Could not load ${doc.fileName}: ${
+          err instanceof Error ? err.message : "unknown error"
+        }`
+      );
+    }
   }, []);
 
   const loadCommentFile = useCallback((file: File) => {
@@ -398,6 +416,36 @@ export default function Home() {
             >
               Open .zip
             </button>
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setDocsMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={docsMenuOpen}
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              Docs
+            </button>
+            {docsMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 z-10 mt-1 min-w-40 rounded-md border border-zinc-300 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                {BUNDLED_DOCS.map((doc) => (
+                  <button
+                    key={doc.key}
+                    role="menuitem"
+                    onClick={() => {
+                      setDocsMenuOpen(false);
+                      openDoc(doc);
+                    }}
+                    className="block w-full px-3 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    {doc.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {markdown && (
             <>
