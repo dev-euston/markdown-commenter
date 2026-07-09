@@ -9,13 +9,16 @@ export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isDev = process.env.NODE_ENV === "development";
 
+  // Per FD-4, the production Airbase edge CSP may override this file; the edge's
+  // `connect-src` allowlist must also include https://sgts.gitlab-dedicated.com
+  // for the deployed direct GitLab call to work (operational follow-up).
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""};
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data:;
     font-src 'self';
-    connect-src 'self'${isDev ? " ws:" : ""};
+    connect-src 'self' https://sgts.gitlab-dedicated.com${isDev ? " ws:" : ""};
     object-src 'none';
     base-uri 'self';
     form-action 'self';

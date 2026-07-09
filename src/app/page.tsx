@@ -17,6 +17,11 @@ import {
 } from "@/lib/highlight";
 import { buildZip, extractZip, zipFileNameFor } from "@/lib/zip";
 import { BUNDLED_DOCS, type BundledDoc, loadBundledDoc } from "@/lib/docs";
+import {
+  fetchGitLabRawFile,
+  fileNameFromPath,
+  parseGitLabBlobUrl,
+} from "@/lib/gitlab";
 import CommentSidebar from "@/components/CommentSidebar";
 import CommentPopover, {
   type PendingAnchor,
@@ -101,6 +106,14 @@ export default function Home() {
   const [showTour, setShowTour] = useState(false);
   const [docsMenuOpen, setDocsMenuOpen] = useState(false);
 
+  // GitLab load controls. Both the URL and the token live only in React state
+  // for the session — never written to localStorage/sessionStorage, never
+  // logged, and the token is cleared after a successful load.
+  const [gitlabUrl, setGitlabUrl] = useState("");
+  const [gitlabToken, setGitlabToken] = useState("");
+  const [gitlabPanelOpen, setGitlabPanelOpen] = useState(false);
+  const [gitlabLoading, setGitlabLoading] = useState(false);
+
   // Bumped whenever a MermaidBlock toggles between diagram and source views.
   // Used only to re-run the DOM highlighter over newly-rendered source text;
   // toggle state itself is never persisted.
@@ -147,6 +160,33 @@ export default function Home() {
       );
     }
   }, []);
+
+  // Load a Markdown file directly from the self-hosted GitLab, reusing the same
+  // render path as loadFile/openDoc (sets markdown + fileName only; leaves
+  // comments untouched). The token is passed only to the GitLab origin and is
+  // cleared from state after a successful load. Never logs the token/response.
+  const loadFromGitLab = useCallback(async () => {
+    let ref;
+    try {
+      ref = parseGitLabBlobUrl(gitlabUrl);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Invalid GitLab URL.");
+      return;
+    }
+
+    setGitlabLoading(true);
+    try {
+      const text = await fetchGitLabRawFile(ref, gitlabToken);
+      setMarkdown(text);
+      setFileName(fileNameFromPath(ref.filePath));
+      setGitlabPanelOpen(false);
+      setGitlabToken("");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not load from GitLab.");
+    } finally {
+      setGitlabLoading(false);
+    }
+  }, [gitlabUrl, gitlabToken]);
 
   const loadCommentFile = useCallback((file: File) => {
     const reader = new FileReader();
@@ -416,6 +456,53 @@ export default function Home() {
             >
               Open .zip
             </button>
+            <div className="relative">
+              <button
+                onClick={() => setGitlabPanelOpen((open) => !open)}
+                aria-haspopup="dialog"
+                aria-expanded={gitlabPanelOpen}
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Load from GitLab
+              </button>
+              {gitlabPanelOpen && (
+                <div
+                  role="dialog"
+                  aria-label="Load from GitLab"
+                  className="absolute right-0 z-10 mt-1 w-80 rounded-md border border-zinc-300 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                >
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    File URL
+                    <input
+                      type="text"
+                      value={gitlabUrl}
+                      onChange={(e) => setGitlabUrl(e.target.value)}
+                      placeholder="https://sgts.gitlab-dedicated.com/group/project/-/blob/main/README.md"
+                      className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    />
+                  </label>
+                  <label className="mt-2 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Access token
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={gitlabToken}
+                      onChange={(e) => setGitlabToken(e.target.value)}
+                      className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    />
+                  </label>
+                  <button
+                    onClick={loadFromGitLab}
+                    disabled={
+                      gitlabLoading || !gitlabUrl.trim() || !gitlabToken.trim()
+                    }
+                    className="mt-3 w-full rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                  >
+                    {gitlabLoading ? "Loading…" : "Load"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <div className="relative">
             <button
