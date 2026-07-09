@@ -189,6 +189,135 @@ describe("Home page — Docs nav", () => {
   });
 });
 
+describe("Home page — Load from GitLab", () => {
+  const VALID_URL =
+    "https://sgts.gitlab-dedicated.com/group/project/-/blob/main/README.md";
+  const TOKEN = "glpat-secret-token-value";
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    markTourSeen();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Open the GitLab panel and fill in the URL and token inputs. */
+  async function fillGitLabPanel(url: string, token: string) {
+    await userEvent.click(
+      screen.getByRole("button", { name: "Load from GitLab" })
+    );
+    const urlInput = screen.getByPlaceholderText(/sgts\.gitlab-dedicated/i);
+    await userEvent.type(urlInput, url);
+    const tokenInput = screen.getByLabelText(/access token/i);
+    if (token) await userEvent.type(tokenInput, token);
+    return { tokenInput };
+  }
+
+  it("loads a document from GitLab and preserves the download controls", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => "# From GitLab\n\nRemote body text.",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    await fillGitLabPanel(VALID_URL, TOKEN);
+    await userEvent.click(screen.getByRole("button", { name: "Load" }));
+
+    expect(await screen.findByText("Remote body text.")).toBeInTheDocument();
+    // Filename derived from the file path is shown.
+    expect(screen.getByText("README.md")).toBeInTheDocument();
+
+    // Existing download controls behave as for a locally-opened file.
+    expect(
+      screen.getByRole("button", { name: "Download comments" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Download .zip" })
+    ).toBeInTheDocument();
+
+    // fetch was called with the parsed raw API URL and the token header.
+    const [calledUrl, init] = fetchMock.mock.calls[0];
+    expect(calledUrl).toBe(
+      "https://sgts.gitlab-dedicated.com/api/v4/projects/group%2Fproject/repository/files/README.md/raw?ref=main"
+    );
+    expect(init).toEqual({ headers: { "PRIVATE-TOKEN": TOKEN } });
+  });
+
+  it("keeps the token out of storage and uses a password input", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => "# Doc",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Home />);
+    const { tokenInput } = await fillGitLabPanel(VALID_URL, TOKEN);
+    expect(tokenInput).toHaveAttribute("type", "password");
+
+    await userEvent.click(screen.getByRole("button", { name: "Load" }));
+    await screen.findByText("Doc");
+
+    expect(JSON.stringify(localStorage)).not.toContain(TOKEN);
+    expect(JSON.stringify(sessionStorage)).not.toContain(TOKEN);
+  });
+
+  it("alerts and does not fetch when the URL host is rejected", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+
+    render(<Home />);
+    await fillGitLabPanel(
+      "https://gitlab.com/group/project/-/blob/main/README.md",
+      TOKEN
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Load" }));
+
+    expect(alertSpy).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("alerts without leaking the token and leaves state intact on 401/403", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403 });
+    vi.stubGlobal("fetch", fetchMock);
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+
+    render(<Home />);
+    await fillGitLabPanel(VALID_URL, TOKEN);
+    await userEvent.click(screen.getByRole("button", { name: "Load" }));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    const message = String(alertSpy.mock.calls[0][0]);
+    expect(message).toMatch(/unauthorized|rejected the token/i);
+    expect(message).not.toContain(TOKEN);
+    // No document was loaded.
+    expect(
+      screen.queryByRole("button", { name: "New comments" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("alerts on 404 and leaves state intact", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    vi.stubGlobal("fetch", fetchMock);
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+
+    render(<Home />);
+    await fillGitLabPanel(VALID_URL, TOKEN);
+    await userEvent.click(screen.getByRole("button", { name: "Load" }));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(String(alertSpy.mock.calls[0][0])).toMatch(/not found/i);
+    expect(
+      screen.queryByRole("button", { name: "New comments" })
+    ).not.toBeInTheDocument();
+  });
+});
+
 const ONE_MERMAID = "# Diagram\n\n```mermaid\ngraph TD; A-->B\n```\n";
 const TWO_MERMAID =
   "```mermaid\ngraph TD; A-->B\n```\n\n```mermaid\ngraph LR; C-->D\n```\n";
