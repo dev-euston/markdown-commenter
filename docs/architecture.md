@@ -256,6 +256,19 @@ flowchart TB
   (`connect-src 'self'`) with no nonce changes. `openDoc` reuses the file-load
   render path (sets markdown + filename, leaves comments untouched), so the
   bundled docs also serve as ready-made sample documents.
+- **GitLab loader** (`src/lib/gitlab.ts`) — a `Load from GitLab` panel in
+  `page.tsx` fetches a Markdown file directly from the org's self-hosted GitLab
+  (host-restricted to `sgts.gitlab-dedicated.com`). `parseGitLabBlobUrl` turns a
+  `/-/blob/` URL into `{ projectPath, ref, filePath }`; `fetchGitLabRawFile`
+  calls the GitLab REST `.../repository/files/:path/raw?ref=` endpoint and maps
+  status codes to human-readable errors. The per-session access token lives only
+  in React state, is sent **only** to the GitLab origin in the `PRIVATE-TOKEN`
+  header, is never persisted/logged/interpolated into errors, and is cleared
+  after a successful load. `loadFromGitLab` reuses the file-load render path
+  (sets markdown + filename, leaves comments untouched). The direct browser→GitLab
+  call requires `connect-src https://sgts.gitlab-dedicated.com` — added to
+  `src/proxy.ts`, but the production **Airbase edge CSP** must allow it too
+  (operational follow-up, see FD-4).
 
 ***
 
@@ -429,6 +442,12 @@ calls `await headers()` to force per-request rendering. Verify a route shows
 edge already injects a CSP, and would only be needed in an environment that
 provides none of its own.
 
+**`connect-src` for the GitLab loader.** The direct browser→GitLab fetch (see
+the GitLab loader building block) needs `connect-src https://sgts.gitlab-dedicated.com`.
+`src/proxy.ts` includes it, but on Airbase the **edge CSP is authoritative**, so
+its `connect-src` allowlist must also include that origin or the deployed load
+fails (operational follow-up).
+
 ***
 
 ## Testing
@@ -496,6 +515,7 @@ libraries and components rather than by a full end-to-end harness.
 - `src/lib/tour.ts` — onboarding tour steps + localStorage "seen" flag
 - `src/lib/mermaid.ts` — lazy, client-only mermaid render wrapper (strict CSP)
 - `src/lib/docs.ts` — registry + fetch of bundled docs served from `public/docs/`
+- `src/lib/gitlab.ts` — parse/fetch a Markdown file from the self-hosted GitLab (per-session token, never persisted)
 - `src/components/MermaidBlock.tsx` — per-block diagram/source toggle + comment anchoring in source view
 - `src/app/page.tsx` — orchestration and state
 - `vitest.config.ts` — test runner + coverage thresholds; `*.test.ts(x)` next to sources

@@ -53,3 +53,6 @@ CLAUDE.md
 
 # Deployment
 airbase.json
+
+# Worktrees
+.worktrees/

@@ -47,6 +47,11 @@ against the text they refer to.
   architecture) straight into the viewer. They ship as same-origin static
   assets under `public/docs/` and are fetched in-browser, so they double as
   ready-made sample documents for trying out commenting.
+- **Load from GitLab** — paste a file URL from the org's self-hosted GitLab
+  (`sgts.gitlab-dedicated.com`) plus a per-session access token to load a
+  Markdown document straight from the repo. The token is sent only to the
+  GitLab origin (in the `PRIVATE-TOKEN` header), never persisted or logged, and
+  cleared from state after a successful load.
 
 ## Tech stack
 
