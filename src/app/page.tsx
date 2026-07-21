@@ -131,15 +131,6 @@ export default function Home() {
     if (!hasSeenTour()) setShowTour(true);
   }, []);
 
-  // Load a bundled doc specified via ?doc=<key> on initial page load.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const docKey = params.get("doc");
-    if (!docKey) return;
-    const doc = BUNDLED_DOCS.find((d) => d.key === docKey);
-    if (doc) openDoc(doc);
-  }, [openDoc]);
-
   const closeTour = useCallback(() => {
     markTourSeen();
     setShowTour(false);
@@ -169,6 +160,15 @@ export default function Home() {
       );
     }
   }, []);
+
+  // Load a bundled doc specified via ?doc=<key> on initial page load.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const docKey = params.get("doc");
+    if (!docKey) return;
+    const doc = BUNDLED_DOCS.find((d) => d.key === docKey);
+    if (doc) openDoc(doc);
+  }, [openDoc]);
 
   // Load a Markdown file directly from the self-hosted GitLab, reusing the same
   // render path as loadFile/openDoc (sets markdown + fileName only; leaves
