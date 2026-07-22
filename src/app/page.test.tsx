@@ -318,6 +318,119 @@ describe("Home page — Load from GitLab", () => {
   });
 });
 
+describe("Home page — Email comments", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    markTourSeen();
+    vi.restoreAllMocks();
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("Email comments button is disabled when no comments are loaded", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container);
+    const btn = screen.getByRole("button", { name: "Email comments" });
+    expect(btn).toBeDisabled();
+  });
+
+  it("Email comments button is enabled when comments exist", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container);
+    await loadComments(container, ["a note"]);
+    const btn = screen.getByRole("button", { name: "Email comments" });
+    expect(btn).not.toBeDisabled();
+  });
+
+  it("clicking Email comments opens the panel with a To input and Send button", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container);
+    await loadComments(container, ["a note"]);
+    await userEvent.click(screen.getByRole("button", { name: "Email comments" }));
+    expect(screen.getByRole("dialog", { name: "Email comments" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
+  });
+
+  it("Send button is disabled when To field is empty", async () => {
+    const { container } = render(<Home />);
+    await loadMarkdown(container);
+    await loadComments(container, ["a note"]);
+    await userEvent.click(screen.getByRole("button", { name: "Email comments" }));
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  });
+
+  it("Send button is disabled while request is in flight", async () => {
+    vi.mocked(global.fetch).mockReturnValue(new Promise(() => {}));
+    const { container } = render(<Home />);
+    await loadMarkdown(container);
+    await loadComments(container, ["a note"]);
+    await userEvent.click(screen.getByRole("button", { name: "Email comments" }));
+    await userEvent.type(screen.getByRole("textbox"), "test@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(screen.getByRole("button", { name: "Sending…" })).toBeDisabled();
+  });
+
+  it("submitting a valid email POSTs to /api/email-comments and closes the panel on success", async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    } as Response);
+    const { container } = render(<Home />);
+    await loadMarkdown(container);
+    await loadComments(container, ["a note"]);
+    await userEvent.click(screen.getByRole("button", { name: "Email comments" }));
+    await userEvent.type(screen.getByRole("textbox"), "test@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Email comments" })).not.toBeInTheDocument()
+    );
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+      "/api/email-comments",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"to":"test@example.com"'),
+      })
+    );
+  });
+
+  it("displays inline error and keeps panel open on API error", async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "Failed to send email." }),
+    } as Response);
+    const { container } = render(<Home />);
+    await loadMarkdown(container);
+    await loadComments(container, ["a note"]);
+    await userEvent.click(screen.getByRole("button", { name: "Email comments" }));
+    await userEvent.type(screen.getByRole("textbox"), "test@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Failed to send email.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Email comments" })).toBeInTheDocument();
+  });
+
+  it("clears the To field after a successful send", async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    } as Response);
+    const { container } = render(<Home />);
+    await loadMarkdown(container);
+    await loadComments(container, ["a note"]);
+    await userEvent.click(screen.getByRole("button", { name: "Email comments" }));
+    await userEvent.type(screen.getByRole("textbox"), "test@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Email comments" })).not.toBeInTheDocument()
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Email comments" }));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
+});
+
 const ONE_MERMAID = "# Diagram\n\n```mermaid\ngraph TD; A-->B\n```\n";
 const TWO_MERMAID =
   "```mermaid\ngraph TD; A-->B\n```\n\n```mermaid\ngraph LR; C-->D\n```\n";

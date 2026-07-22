@@ -110,6 +110,27 @@ docker run -p 3000:3000 markdown-commenter
   so they must be present during `docker build`. Pass them as build args if you
   add any.
 
+## Email feature
+
+The 'Email comments' button sends the current comment set as a `.json` attachment to a recipient email address entered at send time. It requires a server-side SMTP configuration supplied via environment variables.
+
+### Required environment variables
+
+| Variable | Description |
+|---|---|
+| `SMTP_HOST` | SMTP server hostname |
+| `SMTP_USER` | SMTP authentication username |
+| `SMTP_PASS` | SMTP authentication password |
+
+### Optional environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `SMTP_PORT` | `587` | SMTP server port |
+| `EMAIL_FROM` | `SMTP_USER` | Sender address shown in the From header |
+
+Set these in `.env.local` for local development or pass them as `-e` flags / Docker Compose `environment` entries for the container. If any required variable is absent the button's API call returns an error and the panel displays it inline.
+
 ## Comment file format
 
 A comment file is JSON:
