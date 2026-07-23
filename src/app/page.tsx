@@ -113,6 +113,10 @@ export default function Home() {
   const [gitlabToken, setGitlabToken] = useState("");
   const [gitlabPanelOpen, setGitlabPanelOpen] = useState(false);
   const [gitlabLoading, setGitlabLoading] = useState(false);
+  const [emailPanelOpen, setEmailPanelOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   // Bumped whenever a MermaidBlock toggles between diagram and source views.
   // Used only to re-run the DOM highlighter over newly-rendered source text;
@@ -167,6 +171,7 @@ export default function Home() {
     const docKey = params.get("doc");
     if (!docKey) return;
     const doc = BUNDLED_DOCS.find((d) => d.key === docKey);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (doc) openDoc(doc);
   }, [openDoc]);
 
@@ -413,6 +418,32 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }, [comments, fileName, commentFileName, markdown]);
 
+  const sendEmail = useCallback(async () => {
+    const serialized = serializeComments(comments, fileName || undefined);
+    setEmailSending(true);
+    setEmailError(null);
+    try {
+      const res = await fetch('/api/email-comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: emailTo,
+          commentsJson: serialized,
+          fileName: commentFileName || 'comments.json',
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setEmailError(data.error ?? 'Failed to send email.');
+      } else {
+        setEmailPanelOpen(false);
+        setEmailTo('');
+      }
+    } finally {
+      setEmailSending(false);
+    }
+  }, [comments, fileName, commentFileName, emailTo]);
+
   const startNewComments = useCallback(() => {
     if (
       comments.length > 0 &&
@@ -571,6 +602,44 @@ export default function Home() {
                 >
                   Download .zip
                 </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setEmailPanelOpen((open) => !open)}
+                    aria-haspopup="dialog"
+                    aria-expanded={emailPanelOpen}
+                    disabled={comments.length === 0}
+                    className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    Email comments
+                  </button>
+                  {emailPanelOpen && (
+                    <div
+                      role="dialog"
+                      aria-label="Email comments"
+                      className="absolute right-0 z-10 mt-1 w-80 rounded-md border border-zinc-300 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                    >
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        To
+                        <input
+                          type="email"
+                          value={emailTo}
+                          onChange={(e) => setEmailTo(e.target.value)}
+                          className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        />
+                      </label>
+                      <button
+                        onClick={sendEmail}
+                        disabled={emailSending || !emailTo.trim()}
+                        className="mt-3 w-full rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                      >
+                        {emailSending ? 'Sending…' : 'Send'}
+                      </button>
+                      {emailError && (
+                        <p className="mt-2 text-xs text-red-600 dark:text-red-400">{emailError}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <button
                 onClick={clear}
